@@ -35,6 +35,7 @@ class ClaudeCodeAdapter(AgentAdapter):
             stderr=asyncio.subprocess.PIPE,
             cwd=str(work_dir),
             env=proc_env,
+            limit=10 * 1024 * 1024,
         )
 
         assert proc.stdout is not None

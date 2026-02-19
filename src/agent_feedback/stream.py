@@ -35,9 +35,16 @@ PREFIX_MAP = {
 SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 
+def _is_tty(console: Console) -> bool:
+    """True if console output is a TTY (supports \\r in-place updates)."""
+    f = console.file or sys.stdout
+    return getattr(f, "isatty", lambda: False)()
+
+
 class StreamDisplay:
     def __init__(self, console: Console | None = None) -> None:
         self.console = console or Console()
+        self._is_tty = _is_tty(self.console)
         self.tip_references: int = 0
         self.feedback_submitted: int = 0
         self._start_time: float = 0.0
@@ -67,6 +74,8 @@ class StreamDisplay:
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
     def _clear_status_line(self) -> None:
+        if not self._is_tty:
+            return
         f = self.console.file or sys.stdout
         f.write("\r" + " " * 120 + "\r")
         f.flush()
@@ -83,6 +92,12 @@ class StreamDisplay:
         self._clear_status_line()
 
     async def _heartbeat_loop(self) -> None:
+        if not self._is_tty:
+            while self._active:
+                if self._line_buffer.strip():
+                    self._flush_buffer()
+                await asyncio.sleep(0.5)
+            return
         frame_idx = 0
         f = self.console.file or sys.stdout
         while self._active:

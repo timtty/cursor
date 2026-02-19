@@ -35,9 +35,12 @@ class CursorAdapter(AgentAdapter):
             stderr=asyncio.subprocess.PIPE,
             cwd=abs_work_dir,
             env=proc_env,
+            limit=10 * 1024 * 1024,
         )
 
         assert proc.stdout is not None
+
+        seen_text_deltas = False
 
         async for raw_line in proc.stdout:
             line = raw_line.decode().strip()
@@ -47,6 +50,13 @@ class CursorAdapter(AgentAdapter):
                 event = json.loads(line)
             except json.JSONDecodeError:
                 continue
+
+            if event.get("type") == "assistant":
+                if "text_delta" in event:
+                    seen_text_deltas = True
+                elif seen_text_deltas and event.get("message", {}).get("content"):
+                    seen_text_deltas = False
+                    continue
 
             for chunk_type, text in _parse_event(event):
                 if not text:
