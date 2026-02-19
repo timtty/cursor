@@ -21,14 +21,19 @@ class CursorAdapter(AgentAdapter):
 
         proc_env = {**__import__("os").environ, **(env or {})}
 
+        abs_work_dir = str(work_dir.resolve())
+
         proc = await asyncio.create_subprocess_exec(
             "cursor-agent",
             "-p", prompt,
             "--output-format", "stream-json",
-            "--workspace", str(work_dir),
+            "--stream-partial-output",
+            "--workspace", abs_work_dir,
+            "--force",
             "--trust",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            cwd=abs_work_dir,
             env=proc_env,
         )
 
@@ -43,8 +48,9 @@ class CursorAdapter(AgentAdapter):
             except json.JSONDecodeError:
                 continue
 
-            chunk_type, text = _parse_event(event)
-            if text:
+            for chunk_type, text in _parse_event(event):
+                if not text:
+                    continue
                 full_output.append(text)
                 if "agent-feedback submit" in text:
                     feedback_count += 1
@@ -70,27 +76,43 @@ class CursorAdapter(AgentAdapter):
         )
 
 
-def _parse_event(event: dict) -> tuple[str, str]:
+def _parse_event(event: dict) -> list[tuple[str, str]]:
+    """Parse a cursor-agent stream-json event into (chunk_type, text) pairs.
+
+    With --stream-partial-output, cursor-agent emits partial text deltas that
+    may contain only a 'text_delta' field instead of a full message.
+    """
     event_type = event.get("type", "")
+
+    if event_type in ("system", "user"):
+        return []
 
     if event_type == "assistant":
         message = event.get("message", {})
-        for block in message.get("content", []):
+        content = message.get("content", [])
+        chunks: list[tuple[str, str]] = []
+        for block in content:
             block_type = block.get("type", "")
             if block_type == "thinking":
-                return "thinking", block.get("thinking", "")
-            if block_type == "text":
-                return "text", block.get("text", "")
+                chunks.append(("thinking", block.get("thinking", "")))
+            elif block_type == "text":
+                chunks.append(("text", block.get("text", "")))
+        if not chunks:
+            text_delta = event.get("text_delta", "")
+            if text_delta:
+                chunks.append(("text", text_delta))
+        return chunks
 
     if event_type == "tool_use":
         tool_name = event.get("name", "unknown")
         tool_input = json.dumps(event.get("input", {}), indent=2)
-        return "tool", f"[{tool_name}] {tool_input}"
+        return [("tool", f"[{tool_name}] {tool_input}")]
 
     if event_type == "result":
-        return "text", event.get("result", "")
+        result_text = event.get("result", "")
+        return [("text", result_text)] if result_text else []
 
-    return "text", ""
+    return []
 
 
 async def _call_stream(

@@ -86,6 +86,9 @@ class StreamDisplay:
         frame_idx = 0
         f = self.console.file or sys.stdout
         while self._active:
+            if self._line_buffer.strip():
+                self._flush_buffer()
+
             elapsed = time.time() - self._start_time
             idle = time.time() - self._last_activity
             spinner = SPINNER_FRAMES[frame_idx % len(SPINNER_FRAMES)]
