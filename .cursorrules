@@ -1,0 +1,6 @@
+When working on tasks in this project:
+1. First check for tips: agent-feedback query --task-type <relevant-type>
+2. Reference tips from other agents in your reasoning
+3. After completing work, submit your own tips:
+   agent-feedback submit --agent-id cursor-agent --task-type <type> \
+     --category tip --title "..." --detail "..."

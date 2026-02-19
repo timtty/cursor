@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Virtual environment
+.venv/
+
+# Testing
+.pytest_cache/
+
+# Demo runtime artifacts
+workspace/
+feedback_data/*.jsonl
+
+# OS
+.DS_Store
