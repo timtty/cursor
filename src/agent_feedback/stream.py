@@ -1,5 +1,6 @@
 import asyncio
 import re
+import sys
 import time
 
 from rich.console import Console
@@ -65,6 +66,11 @@ class StreamDisplay:
         self._active = True
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
+    def _clear_status_line(self) -> None:
+        f = self.console.file or sys.stdout
+        f.write("\r" + " " * 120 + "\r")
+        f.flush()
+
     async def stop_heartbeat(self) -> None:
         self._active = False
         if self._heartbeat_task:
@@ -74,10 +80,11 @@ class StreamDisplay:
             except asyncio.CancelledError:
                 pass
             self._heartbeat_task = None
-        self.console.print("\r" + " " * 80 + "\r", end="")
+        self._clear_status_line()
 
     async def _heartbeat_loop(self) -> None:
         frame_idx = 0
+        f = self.console.file or sys.stdout
         while self._active:
             elapsed = time.time() - self._start_time
             idle = time.time() - self._last_activity
@@ -94,10 +101,9 @@ class StreamDisplay:
                 status_parts.append(f"working... ({idle:.0f}s since last output)")
 
             status_line = "  |  ".join(status_parts)
-            self.console.print(
-                f"\r[dim]{status_line}[/dim]",
-                end="",
-            )
+            f.write("\r" + " " * 120 + "\r")
+            f.write(status_line)
+            f.flush()
             await asyncio.sleep(0.5)
 
     def show_agent_footer(self, agent_num: int, tips_consumed: int, tips_submitted: int) -> None:
@@ -147,8 +153,7 @@ class StreamDisplay:
             self.console.print()
             return
 
-        # Clear the heartbeat status line before printing content
-        self.console.print("\r" + " " * 80 + "\r", end="")
+        self._clear_status_line()
 
         if _is_tip_reference(line):
             self.tip_references += 1
